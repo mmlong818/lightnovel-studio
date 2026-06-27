@@ -25,6 +25,7 @@ const Icon = {
   trash: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>,
   x: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
   book2: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
+  download: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
 };
 
 const NAV: { key: View; label: string; icon: React.ReactNode; sub?: string }[] = [
@@ -250,6 +251,88 @@ export default function App() {
     storage.setActiveId(null);
   };
 
+  // ===== 导出小说正文为MD =====
+  const exportNovelMD = () => {
+    if (!activeProject) return;
+    const lines: string[] = [];
+    
+    // 标题
+    lines.push(`# ${activeProject.title}\n`);
+    
+    // 正文
+    const sorted = [...activeProject.chapters].sort((a, b) => a.number - b.number);
+    sorted.forEach(ch => {
+      lines.push(`## 第${ch.number}章：${ch.title}`);
+      lines.push(`> 字数：${ch.wordCount}\n`);
+      lines.push(ch.content || '（此章节暂无内容）');
+      lines.push('\n---\n');
+    });
+    
+    // 下载
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${activeProject.title}_小说正文.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  };
+
+  // ===== 导出完整项目为MD（含设定） =====
+  const exportFullMD = () => {
+    if (!activeProject) return;
+    const lines: string[] = [];
+    
+    // 标题
+    lines.push(`# ${activeProject.title}\n`);
+    lines.push(`- 类型：${activeProject.genre || '未设置'}`);
+    lines.push(`- 语言：${activeProject.lang || 'zh'}`);
+    const totalWords = activeProject.chapters.reduce((s, c) => s + c.wordCount, 0);
+    lines.push(`- 总字数：${totalWords.toLocaleString()}\n`);
+    lines.push('---\n');
+    
+    // 世界观
+    if (activeProject.world?.overview) {
+      lines.push('## 世界观\n');
+      lines.push(activeProject.world.overview);
+      lines.push('\n---\n');
+    }
+    
+    // 角色
+    if (activeProject.characters.length > 0) {
+      lines.push('## 角色\n');
+      activeProject.characters.forEach(c => {
+        lines.push(`### ${c.name}（${c.role}）`);
+        if (c.age) lines.push(`- 年龄：${c.age}`);
+        if (c.personalityKeywords) lines.push(`- 性格：${c.personalityKeywords}`);
+        if (c.motivation) lines.push(`- 动机：${c.motivation}`);
+        lines.push('');
+      });
+      lines.push('---\n');
+    }
+    
+    // 正文
+    lines.push('## 正文\n');
+    const sorted = [...activeProject.chapters].sort((a, b) => a.number - b.number);
+    sorted.forEach(ch => {
+      lines.push(`## 第${ch.number}章：${ch.title}`);
+      lines.push(`> 字数：${ch.wordCount}\n`);
+      lines.push(ch.content || '（此章节暂无内容）');
+      lines.push('\n---\n');
+    });
+    
+    // 下载
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${activeProject.title}_完整项目.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  };
+
   // ── 首页：书架 ──────────────────────────────────────────────
 
   if (!activeProject) {
@@ -427,10 +510,52 @@ export default function App() {
             <span style={{ color: '#e11d5a', flexShrink: 0 }}>{NAV.find(n => n.key === view)?.icon}</span>
             <span style={{ fontSize: 14, fontWeight: 500, color: '#1c1917' }}>{NAV.find(n => n.key === view)?.label}</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 12, color: '#a8a29e' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: '#a8a29e' }}>
             <span>{activeProject.characters.length} 角色</span>
             <span>{activeProject.chapters.length} 章节</span>
             <span style={{ color: '#78716c', fontWeight: 500 }}>{totalWords.toLocaleString()} 字</span>
+            
+            {/* 导出按钮组 */}
+            <div style={{ display: 'flex', gap: 6, borderLeft: '1px solid #ede9e3', paddingLeft: 12 }}>
+              <button
+                onClick={exportNovelMD}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  padding: '4px 12px',
+                  borderRadius: 6,
+                  border: '1px solid #e11d5a',
+                  background: 'transparent',
+                  color: '#e11d5a',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#fdf2f4'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                {Icon.download} 导出正文
+              </button>
+              <button
+                onClick={exportFullMD}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  padding: '4px 12px',
+                  borderRadius: 6,
+                  border: '1px solid #a8a29e',
+                  background: 'transparent',
+                  color: '#78716c',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#f5f5f4'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                {Icon.download} 导出完整
+              </button>
+            </div>
           </div>
         </div>
 
